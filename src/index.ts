@@ -3,14 +3,20 @@ import fs from "fs";
 import glob from "glob";
 
 const PROJECT_ARG = "--project";
+const OUTPUT_ARG = "--output";
 /* Catches all hex and rgb(a) colors */
 const COLOR_REGEX = /(#[0-9a-fA-F]{3,}|rgba?\(\d+,\s?\d+,\s?\d+,?\s?\d?\))/gm;
 const extractCurrentFilename = (path: string): string => {
   const splitted = path.split("/");
-  return splitted[splitted.length - 1];
+  let name = splitted[splitted.length - 1];
+  if (name) {
+    return name;
+  }
+  return splitted[splitted.length - 2];
 };
 
 const projectArg = process.argv.find((arg) => arg.startsWith(PROJECT_ARG));
+const outputArg = process.argv.find((arg) => arg.startsWith(OUTPUT_ARG));
 if (!projectArg) {
   throw new Error(
     `Please supply an argument named '${PROJECT_ARG}' with the project you want to check. Example '--project=some/project'`
@@ -18,6 +24,7 @@ if (!projectArg) {
 }
 
 const projectPath = projectArg.split("=")[1];
+const outputPath = outputArg?.split("=")[1];
 const result: { file: string; colors: string[] }[] = [];
 const uniqueColors: string[] = [];
 glob(`${projectPath}/!(node_modules)/**/*.{css,scss}`, (err, filePaths) => {
@@ -40,8 +47,10 @@ glob(`${projectPath}/!(node_modules)/**/*.{css,scss}`, (err, filePaths) => {
     }
   }
   result.sort((a, b) => a.file.localeCompare(b.file));
-  console.log(
-    `# ${extractCurrentFilename(projectPath)}
+
+  const projectName = extractCurrentFilename(projectPath);
+
+  const content = `# ${projectName}
 
 ## Unique colors
 
@@ -55,6 +64,21 @@ glob(`${projectPath}/!(node_modules)/**/*.{css,scss}`, (err, filePaths) => {
 ## Colors per file
 
 ${result.map((r) => `- ${r.file}\n  - ${r.colors.join("\n  - ")}\n`).join("")}
-`
-  );
+`;
+  if (outputPath) {
+    const filePath = `${outputPath}${
+      outputPath.endsWith("/") ? "" : "/"
+    }${projectName}.md`;
+    fs.writeFile(filePath, content, { encoding: "utf-8" }, (err) => {
+      if (err) {
+        throw new Error(
+          `Failed to create file at '${filePath}', ${err?.message}`
+        );
+      } else {
+        console.log(`File created '${filePath}'`);
+      }
+    });
+  } else {
+    console.log(content);
+  }
 });
